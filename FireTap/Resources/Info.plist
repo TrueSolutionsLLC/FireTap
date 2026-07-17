@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>$(APP_DISPLAY_NAME)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- Face ID / App Lock. Value read directly by the system when Face ID is used. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>FireTap uses Face ID to lock the app and to unlock write access when leaving read-only Safe Mode.</string>
+
+	<!-- Centralized values surfaced to Swift via AppConfig. Populated from xcconfig. -->
+	<key>PCAppDisplayName</key>
+	<string>$(APP_DISPLAY_NAME)</string>
+	<key>PCOAuthClientID</key>
+	<string>$(GOOGLE_OAUTH_CLIENT_ID)</string>
+	<key>PCOAuthRedirectScheme</key>
+	<string>$(GOOGLE_OAUTH_REDIRECT_SCHEME)</string>
+	<key>PCStoreKitProProductID</key>
+	<string>$(STOREKIT_PRO_PRODUCT_ID)</string>
+	<key>PCSupportURL</key>
+	<string>$(SUPPORT_URL)</string>
+	<key>PCPrivacyPolicyURL</key>
+	<string>$(PRIVACY_POLICY_URL)</string>
+	<key>PCTermsURL</key>
+	<string>$(TERMS_URL)</string>
+	<key>PCBuildChannel</key>
+	<string>$(PC_BUILD_CHANNEL)</string>
+
+	<!-- Custom URL scheme used as the OAuth redirect target for ASWebAuthenticationSession. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_OAUTH_REDIRECT_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- We only talk to Google/Firebase HTTPS endpoints; no arbitrary loads. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+</dict>
+</plist>

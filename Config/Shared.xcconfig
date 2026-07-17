@@ -1,0 +1,26 @@
+// Shared.xcconfig
+// ---------------------------------------------------------------------------
+// Single source of truth for product identity. Change these values here and
+// they propagate everywhere (Info.plist, entitlements, Swift via AppConfig).
+// Never put real secrets in this file — those belong in Secrets.xcconfig,
+// which is git-ignored. This file is safe to commit.
+// ---------------------------------------------------------------------------
+
+#include? "Secrets.xcconfig"
+
+// --- Product identity ------------------------------------------------------
+APP_DISPLAY_NAME = FireTap
+APP_BUNDLE_ID = com.truesolutions.firetap
+
+// --- StoreKit --------------------------------------------------------------
+// Non-consumable lifetime Pro unlock. Referenced by AppConfig.storeKitProProductID.
+STOREKIT_PRO_PRODUCT_ID = com.truesolutions.firetap.lifetime
+
+// --- Support / legal URLs (shown in Settings) ------------------------------
+SUPPORT_URL = https:/$()/firetap.app/support
+PRIVACY_POLICY_URL = https:/$()/firetap.app/privacy
+TERMS_URL = https:/$()/firetap.app/terms
+
+// --- Networking ------------------------------------------------------------
+// Marketing version + build are defined in project.yml (MARKETING_VERSION /
+// CURRENT_PROJECT_VERSION) so they stay in one place for releases.

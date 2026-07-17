@@ -1,0 +1,4 @@
+#include "Shared.xcconfig"
+
+// Release-only overrides.
+PC_BUILD_CHANNEL = release

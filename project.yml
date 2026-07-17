@@ -1,0 +1,107 @@
+name: FireTap
+options:
+  bundleIdPrefix: com.truesolutions
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+
+# ---------------------------------------------------------------------------
+# Centralized build settings.
+#
+# Product name, bundle identifier, OAuth client id / redirect scheme, and the
+# StoreKit product id all resolve from xcconfig variables so they can be
+# changed in ONE place (Config/*.xcconfig) without touching Swift code.
+# Real secrets live in Config/Secrets.xcconfig which is git-ignored; a
+# template is committed as Config/Secrets.xcconfig.example.
+# ---------------------------------------------------------------------------
+configs:
+  Debug: debug
+  Release: release
+
+settingGroups:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES: "YES"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    GCC_TREAT_WARNINGS_AS_ERRORS: "NO"
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: "NO"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  FireTap:
+    type: application
+    platform: iOS
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    sources:
+      - path: FireTap
+        excludes:
+          - "**/.DS_Store"
+          - "Supporting/FireTap.entitlements"
+    settings:
+      groups: [base]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(APP_BUNDLE_ID)"
+        INFOPLIST_FILE: FireTap/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: FireTap/Supporting/FireTap.entitlements
+        ENABLE_PREVIEWS: "YES"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        DEVELOPMENT_ASSET_PATHS: ""
+    scheme:
+      testTargets:
+        - FireTapTests
+      gatherCoverageData: true
+      storeKitConfiguration: StoreKitConfig/FireTap.storekit
+      environmentVariables:
+        - variable: PC_UI_TEST_MODE
+          value: "0"
+          isEnabled: false
+
+  FireTapTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/FireTapTests
+    dependencies:
+      - target: FireTap
+    settings:
+      groups: [base]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(APP_BUNDLE_ID).tests"
+        GENERATE_INFOPLIST_FILE: "YES"
+
+  FireTapUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/FireTapUITests
+    dependencies:
+      - target: FireTap
+    settings:
+      groups: [base]
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(APP_BUNDLE_ID).uitests"
+        GENERATE_INFOPLIST_FILE: "YES"
+
+schemes:
+  FireTap-UITests:
+    build:
+      targets:
+        FireTap: all
+        FireTapUITests: [test]
+    test:
+      targets:
+        - FireTapUITests

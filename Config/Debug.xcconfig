@@ -1,0 +1,5 @@
+#include "Shared.xcconfig"
+
+// Debug-only overrides.
+PC_BUILD_CHANNEL = debug
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG

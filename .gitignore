@@ -1,0 +1,31 @@
+# ---- Secrets (never commit) ----
+Config/Secrets.xcconfig
+
+# ---- Xcode ----
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# XcodeGen regenerates the project; keep it out of source control.
+FireTap.xcodeproj/
+
+# ---- Swift Package Manager ----
+.build/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+
+# ---- macOS ----
+.DS_Store
+
+# ---- Misc ----
+*.log

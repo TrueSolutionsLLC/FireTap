@@ -1,0 +1,31 @@
+{
+  "identifier" : "FIRETAP_LOCAL_STOREKIT",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "24.99",
+      "familyShareable" : false,
+      "internalID" : "FT0000000001",
+      "localizations" : [
+        {
+          "description" : "Unlock unlimited connected projects and all write / admin actions. One-time purchase, yours forever. No subscription.",
+          "displayName" : "FireTap Pro (Lifetime)",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.truesolutions.firetap.lifetime",
+      "referenceName" : "Pro Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "FIRETAP",
+    "_developerTeamID" : "",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

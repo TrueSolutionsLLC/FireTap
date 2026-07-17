@@ -1,0 +1,25 @@
+import Foundation
+
+/// Generic loading phase used by view models. Enables honest, explicit UI
+/// states — there is no ambiguous "maybe loaded" condition.
+enum AsyncPhase<Value: Sendable>: Sendable {
+    case idle
+    case loading
+    case loaded(Value)
+    case failed(APIError)
+
+    var value: Value? {
+        if case .loaded(let value) = self { return value }
+        return nil
+    }
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    var error: APIError? {
+        if case .failed(let error) = self { return error }
+        return nil
+    }
+}
