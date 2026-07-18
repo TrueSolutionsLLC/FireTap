@@ -1,15 +1,20 @@
 import SwiftUI
 
-/// Figma "02 — Projects": the account's real Firebase projects with search,
-/// sort, pin, and environment labels. Selecting a project enters the console.
+/// Account's real Firebase projects with search, sort, pin, and environment
+/// labels. Selecting a project enters the console.
 struct ProjectPickerView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var model: ProjectsViewModel?
+    @State private var showingAccountSheet = false
+    @State private var boundAccountID: String?
+    @State private var showProGate = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if let model {
+                if env.isRestoringProject {
+                    LoadingStateView().padding()
+                } else if let model {
                     content(model)
                 } else {
                     LoadingStateView().padding()
@@ -18,17 +23,37 @@ struct ProjectPickerView: View {
             .appBackground()
             .navigationTitle("Projects")
             .toolbar { toolbar }
-        }
-        .task {
-            if model == nil, let account = env.accountManager.activeAccount {
-                let vm = ProjectsViewModel(
-                    projectsService: env.projectsService,
-                    preferences: env.preferences,
-                    accountID: account.id
-                )
-                model = vm
-                await vm.load()
+            .sheet(isPresented: $showingAccountSheet) {
+                AccountSwitcherSheet()
             }
+            .alert("FireTap Pro required", isPresented: $showProGate) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Free mode includes read-only access to one connected project. Unlock Pro for unlimited projects and write/admin actions.")
+            }
+        }
+        .task(id: env.accountManager.activeAccountID) {
+            await bindModelIfNeeded()
+        }
+    }
+
+    private func bindModelIfNeeded() async {
+        guard let account = env.accountManager.activeAccount else {
+            model = nil
+            boundAccountID = nil
+            return
+        }
+        if boundAccountID != account.id {
+            let vm = ProjectsViewModel(
+                projectsService: env.projectsService,
+                preferences: env.preferences,
+                accountID: account.id
+            )
+            model = vm
+            boundAccountID = account.id
+            await vm.load()
+        } else if model?.phase.value == nil, model?.phase.error == nil {
+            await model?.load()
         }
     }
 
@@ -42,15 +67,27 @@ struct ProjectPickerView: View {
             ErrorStateView(error: error) {
                 Task { await model.load() }
             } reauth: {
-                Task { await env.accountManager.setActiveAccount(nil) }
+                Task { await env.accountManager.signOut() }
             }
         case .loaded(let projects):
             if projects.isEmpty {
                 EmptyStateView(
                     title: "No Firebase projects",
-                    message: "This Google account doesn't have any Firebase projects yet, or the Firebase Management API isn't enabled for it.",
-                    systemImage: "square.stack.3d.up.slash"
-                )
+                    message: "This Google account doesn’t have any Firebase projects yet, or the Firebase Management API isn’t enabled. Create a project in the Firebase console, then try again.",
+                    systemImage: "square.stack.3d.up.slash",
+                    actionTitle: "Try again"
+                ) {
+                    Task { await model.load() }
+                }
+            } else if model.displayedProjects.isEmpty {
+                EmptyStateView(
+                    title: "No matches",
+                    message: "No projects match “\(model.searchText)”.",
+                    systemImage: "magnifyingglass",
+                    actionTitle: "Clear search"
+                ) {
+                    model.searchText = ""
+                }
             } else {
                 projectList(model)
             }
@@ -60,15 +97,49 @@ struct ProjectPickerView: View {
     private func projectList(_ model: ProjectsViewModel) -> some View {
         @Bindable var model = model
         return List {
+            if let account = env.accountManager.activeAccount {
+                Section {
+                    HStack(spacing: Theme.Spacing.md) {
+                        Circle()
+                            .fill(Theme.Palette.surfaceRaised)
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Text(account.initials)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Theme.Palette.textPrimary)
+                            )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(account.displayName ?? account.email)
+                                .font(.pcBodyEmphasis)
+                                .foregroundStyle(Theme.Palette.textPrimary)
+                                .lineLimit(1)
+                            Text(account.email)
+                                .font(.pcCaption)
+                                .foregroundStyle(Theme.Palette.textSecondary)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Button("Switch") { showingAccountSheet = true }
+                            .font(.pcCaption)
+                    }
+                    .listRowBackground(Theme.Palette.surface)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Signed in as \(account.email)")
+                }
+            }
+
             Section {
                 ForEach(model.displayedProjects) { project in
-                    ProjectRow(
-                        project: project,
-                        environment: model.environment(for: project),
-                        isPinned: model.isPinned(project)
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture { open(project, model: model) }
+                    Button {
+                        open(project, model: model)
+                    } label: {
+                        ProjectRow(
+                            project: project,
+                            environment: model.environment(for: project),
+                            isPinned: model.isPinned(project)
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .leading) {
                         Button {
                             model.togglePin(project)
@@ -80,15 +151,16 @@ struct ProjectPickerView: View {
                     }
                     .contextMenu { environmentMenu(project, model: model) }
                     .listRowBackground(Theme.Palette.surface)
+                    .accessibilityIdentifier("projects.row.\(project.projectId)")
                 }
             } header: {
-                Text("\(model.connectedCount) connected • \(model.productionCount) production")
+                Text("\(model.connectedCount) projects • \(model.activeCount) active • \(model.productionCount) production")
                     .font(.pcCaption)
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .searchable(text: $model.searchText, prompt: "Search projects")
+        .searchable(text: $model.searchText, prompt: "Search name, ID, or number")
         .refreshable { await model.refresh() }
     }
 
@@ -120,14 +192,24 @@ struct ProjectPickerView: View {
             } label: {
                 Image(systemName: "arrow.up.arrow.down")
             }
+            .accessibilityLabel("Sort projects")
         }
         ToolbarItem(placement: .topBarLeading) {
-            AccountBadge()
+            Button {
+                showingAccountSheet = true
+            } label: {
+                AccountBadge()
+            }
+            .accessibilityLabel("Account switcher")
         }
     }
 
     private func open(_ project: FirebaseProject, model: ProjectsViewModel) {
         guard let account = env.accountManager.activeAccount else { return }
+        if !env.featureGate.canOpenProject(id: project.projectId, freeProjectID: env.freeTierProjectID) {
+            showProGate = true
+            return
+        }
         env.open(
             project: project,
             environment: model.environment(for: project),
@@ -136,7 +218,7 @@ struct ProjectPickerView: View {
     }
 }
 
-/// Compact project row matching the Figma density.
+/// Compact project row: name, ID, number, lifecycle, environment.
 struct ProjectRow: View {
     let project: FirebaseProject
     let environment: ProjectEnvironment
@@ -151,6 +233,7 @@ struct ProjectRow: View {
                     Image(systemName: "bolt.horizontal.fill")
                         .foregroundStyle(environment.accentColor)
                 )
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(project.name)
@@ -161,14 +244,31 @@ struct ProjectRow: View {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
                             .foregroundStyle(Theme.Palette.textTertiary)
+                            .accessibilityLabel("Pinned")
                     }
                 }
                 Text(project.projectId)
                     .font(.pcMonoSmall)
                     .foregroundStyle(Theme.Palette.textSecondary)
                     .lineLimit(1)
+                HStack(spacing: 6) {
+                    if let number = project.projectNumber {
+                        Text("#\(number)")
+                            .font(.pcCaption)
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                    }
+                    Text(project.lifecycleDisplay)
+                        .font(.pcCaption)
+                        .foregroundStyle(project.isActive ? Theme.Palette.healthy : Theme.Palette.textTertiary)
+                    if let region = project.regionDisplay {
+                        Text("• \(region)")
+                            .font(.pcCaption)
+                            .foregroundStyle(Theme.Palette.textTertiary)
+                            .lineLimit(1)
+                    }
+                }
             }
-            Spacer()
+            Spacer(minLength: 8)
             if environment != .unlabeled {
                 Text(environment.shortTitle)
                     .font(.pcLabel)
@@ -180,11 +280,18 @@ struct ProjectRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(project.name), \(project.projectId), \(environment.title)")
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        var parts = [project.name, project.projectId, project.lifecycleDisplay]
+        if let number = project.projectNumber { parts.append("number \(number)") }
+        if environment != .unlabeled { parts.append(environment.title) }
+        if isPinned { parts.append("pinned") }
+        return parts.joined(separator: ", ")
     }
 }
 
-/// Small circular account initials badge used in navigation bars.
 struct AccountBadge: View {
     @Environment(AppEnvironment.self) private var env
 

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Live Firebase Authentication user directory. Paginated via the Identity
 /// Toolkit `accounts:batchGet` endpoint, with server-side lookup for search by
-/// email, phone, or UID. Read-only in this build — no fake write controls.
+/// email, phone, or UID. Writes (disable/delete/claims/reset) live on the
+/// detail screen and are gated by Pro + Safe Mode + typed confirmation.
 struct AuthUsersView: View {
     let project: FirebaseProject
     @Environment(AppEnvironment.self) private var env
@@ -112,7 +113,7 @@ struct AuthUsersView: View {
             }
             ForEach(shown) { user in
                 NavigationLink {
-                    AuthUserDetailView(user: user)
+                    AuthUserDetailView(project: project, user: user)
                 } label: {
                     userRow(user)
                 }

@@ -11,12 +11,11 @@ Honest status of the build. ✅ done · 🟡 partial/foundation present · ⬜ n
 - ✅ App icon asset
 
 ## Security & session
-- ✅ PKCE (S256) + random state, constant-time state validation
-- ✅ `ASWebAuthenticationSession` sign-in (system browser; no password seen)
-- ✅ Google OAuth client (authorize/exchange/refresh/revoke/userinfo), no secret
-- ✅ Keychain credential store (refresh tokens only; not UserDefaults)
-- ✅ `TokenService` actor with **deduplicated** refresh + 401→refresh→retry
-- ✅ Multi-account: add, switch, disconnect (revoke), delete local credentials
+- ✅ Official **Google Sign-In SDK** (Authorization Code + PKCE via SDK; no client secret)
+- ✅ Tokens only in SDK Keychain-backed storage (never UserDefaults)
+- ✅ Phase 1 scopes: identity + `firebase.readonly`; write scopes deferred to incremental auth
+- ✅ Session restore (`restorePreviousSignIn`), auto token refresh, sign-out / disconnect / delete local
+- ✅ Account switcher (different Google account) + connected-account display
 - ✅ Scope consent screen explaining each permission before authorization
 - ✅ Face ID / App Lock (`LocalAuthentication`)
 - ✅ Production Safe Mode: read-only default, biometric unlock, inactivity + background relock
@@ -35,7 +34,7 @@ Honest status of the build. ✅ done · 🟡 partial/foundation present · ⬜ n
 - ✅ App not hidden behind paywall
 
 ## Modules
-- ✅ Projects: live list, search, sort, pin, environment labels, production indicator, last-opened memory
+- ✅ **Phase 1 Projects vertical slice:** live Firebase Management API list (paginated), search, active-first sort, pin, environment labels, project number + lifecycle, pull-to-refresh, last-project restore with access check, account switcher, honest empty/error/offline states
 - 🟡 Command Center: live project facts + apps; metrics via Monitoring pending; honest metric state
 - ✅ Firestore: live databases default, collections, **paginated** documents with **read counting** + large-read warning, document detail (fields tree + JSON), copy path/reference, timestamps
 - 🟡 Firestore writes: guarded framework designed; mutation endpoints pending

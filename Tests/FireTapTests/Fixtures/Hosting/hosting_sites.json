@@ -1,0 +1,11 @@
+{
+  "sites": [
+    {
+      "name": "projects/demo-project/sites/demo",
+      "defaultUrl": "https://demo.web.app",
+      "appId": "1:123456789:web:abc",
+      "type": "DEFAULT_SITE"
+    }
+  ],
+  "nextPageToken": "PAGE2"
+}

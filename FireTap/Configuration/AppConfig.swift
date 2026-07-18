@@ -72,8 +72,8 @@ enum AppConfig {
             && !oauthRedirectScheme.isEmpty
     }
 
-    /// Minimum set of Google OAuth scopes the app requests, each paired with a
-    /// plain-language explanation shown to the user *before* authorization.
+    /// Minimum set of Google OAuth scopes the app requests at first sign-in.
+    /// Write/admin scopes are requested later via incremental authorization.
     static let oauthScopes: [OAuthScope] = [
         OAuthScope(
             value: "openid",
@@ -91,27 +91,27 @@ enum AppConfig {
             explanation: "Your name and avatar are displayed in the account switcher."
         ),
         OAuthScope(
-            value: "https://www.googleapis.com/auth/cloud-platform",
-            title: "Manage your Google Cloud / Firebase projects",
-            explanation: "Lets the app read your real projects, metrics, logs, Firestore data, users, storage and (with Pro + Safe Mode unlocked) perform the specific admin actions you approve. Requests go directly from your device to Google."
-        ),
-        OAuthScope(
-            value: "https://www.googleapis.com/auth/firebase.database",
-            title: "Access Realtime Database",
-            explanation: "Only used when you open the Realtime Database module for a project."
+            value: "https://www.googleapis.com/auth/firebase.readonly",
+            title: "View your Firebase projects",
+            explanation: "Lets FireTap list the Firebase projects your Google account can access. Read-only — no changes are made until you later approve write access for a specific action."
         )
     ]
 
-    /// Space-delimited scope string for the authorization request.
+    /// Space-delimited scope string for documentation / consent UI.
     static var oauthScopeString: String {
         oauthScopes.map(\.value).joined(separator: " ")
     }
 
-    /// Scopes that must be granted for core functionality. If these are
-    /// missing after sign-in the app asks the user to reauthenticate rather
-    /// than silently failing later.
+    /// Scopes that must be granted for Phase 1 core functionality.
     static let requiredScopeValues: [String] = [
-        "https://www.googleapis.com/auth/cloud-platform"
+        "https://www.googleapis.com/auth/firebase.readonly"
+    ]
+
+    /// Scopes requested later via incremental authorization when the user
+    /// attempts a write / admin action (not requested at first sign-in).
+    static let writeScopeValues: [String] = [
+        "https://www.googleapis.com/auth/cloud-platform",
+        "https://www.googleapis.com/auth/firebase.database"
     ]
 
     // MARK: StoreKit

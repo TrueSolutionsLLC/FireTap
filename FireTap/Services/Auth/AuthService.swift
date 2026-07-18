@@ -1,24 +1,30 @@
 import Foundation
 
-/// How to search the user directory when looking up a single account.
 enum AuthLookupKey: Sendable, Equatable {
     case email(String)
     case phone(String)
     case uid(String)
 }
 
-/// Reads Firebase Authentication users via the documented Identity Toolkit
-/// Admin API. Reads only for now — write operations (create/update/disable/
-/// delete) are intentionally not exposed until they can be verified against a
-/// real non-production project, so the UI never shows a working-looking control
-/// for an unverified operation.
 protocol AuthService: Sendable {
-    /// One page of accounts via `accounts:batchGet` (cursor pagination).
     func listUsers(projectID: String, pageSize: Int, pageToken: String?) async throws -> DownloadAccountResponse
-    /// A single account via `accounts:lookup`.
     func lookupUser(projectID: String, key: AuthLookupKey) async throws -> AuthUser?
-    /// Total account count via `accounts:query` (no user bodies fetched).
     func countUsers(projectID: String) async throws -> Int?
+    func updateUser(projectID: String, request: AuthUserUpdateRequest) async throws -> AuthUser
+    func deleteUser(projectID: String, localID: String) async throws
+    /// Sends a password-reset email via Identity Toolkit `accounts:sendOobCode`.
+    /// FireTap never displays, stores, or generates passwords.
+    func sendPasswordResetEmail(projectID: String, email: String) async throws
+}
+
+struct AuthUserUpdateRequest: Encodable, Sendable {
+    var localId: String
+    var email: String?
+    var displayName: String?
+    var phoneNumber: String?
+    var disableUser: Bool?
+    var customAttributes: String?
+    var validSince: String?
 }
 
 struct LiveAuthService: AuthService {
@@ -55,6 +61,27 @@ struct LiveAuthService: AuthService {
         let response: QueryAccountResponse = try await api.send(HTTPRequest(.post, url: url, body: body))
         return response.count
     }
+
+    func updateUser(projectID: String, request: AuthUserUpdateRequest) async throws -> AuthUser {
+        let url = base.appendingPathComponent("projects/\(projectID)/accounts:update")
+        let body = try GoogleAPIClient.jsonBody(request)
+        // Identity Toolkit returns the updated user object at the top level.
+        return try await api.send(HTTPRequest(.post, url: url, body: body))
+    }
+
+    func deleteUser(projectID: String, localID: String) async throws {
+        let url = base.appendingPathComponent("projects/\(projectID)/accounts:delete")
+        let body = try GoogleAPIClient.jsonBody(DeleteRequest(localId: localID))
+        _ = try await api.sendVoid(HTTPRequest(.post, url: url, body: body))
+    }
+
+    func sendPasswordResetEmail(projectID: String, email: String) async throws {
+        let url = base.appendingPathComponent("projects/\(projectID)/accounts:sendOobCode")
+        let body = try GoogleAPIClient.jsonBody(
+            SendOobCodeRequest(requestType: "PASSWORD_RESET", email: email)
+        )
+        _ = try await api.sendVoid(HTTPRequest(.post, url: url, body: body))
+    }
 }
 
 private struct LookupRequest: Encodable {
@@ -73,4 +100,13 @@ private struct LookupRequest: Encodable {
 
 private struct QueryRequest: Encodable {
     let returnUserInfo: Bool
+}
+
+private struct DeleteRequest: Encodable {
+    let localId: String
+}
+
+private struct SendOobCodeRequest: Encodable {
+    let requestType: String
+    let email: String
 }

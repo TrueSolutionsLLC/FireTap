@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Firestore document in REST format.
-struct FirestoreDocument: Codable, Sendable, Identifiable, Equatable {
+struct FirestoreDocument: Codable, Sendable, Identifiable, Equatable, Hashable {
     /// Full resource name: `projects/P/databases/D/documents/coll/doc`.
     let name: String
     let fields: [String: FirestoreValue]?
@@ -9,6 +9,10 @@ struct FirestoreDocument: Codable, Sendable, Identifiable, Equatable {
     let updateTime: String?
 
     var id: String { name }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+    }
 
     /// Last path component (the document id).
     var documentID: String {

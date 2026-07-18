@@ -1,78 +1,109 @@
-# Google OAuth Setup & Verification Checklist
+# Google Sign-In & OAuth Setup (Phase 1)
 
-FireTap signs in with **Google OAuth 2.0 Authorization Code Flow + PKCE** using an **iOS OAuth client**. iOS clients are *public clients*: there is **no client secret**, which is why nothing secret is ever compiled into the app.
+FireTap signs in with the **official Google Sign-In SDK for iOS**. The SDK performs **OAuth 2.0 Authorization Code Flow with PKCE**. There is **no client secret** in the app. Access and refresh tokens stay in the SDK’s **Keychain-backed** storage — never UserDefaults, logs, or an app-owned server.
 
-## 1. Create the OAuth client
+## 1. Create the OAuth iOS client
 
-1. Open the [Google Cloud Console](https://console.cloud.google.com/) and select (or create) a project. For development, prefer a **dedicated non-production project**.
+1. Open [Google Cloud Console](https://console.cloud.google.com/) → select (or create) the GCP project that will own the OAuth client.
 2. **APIs & Services → OAuth consent screen**
-   - User type: External (or Internal for Workspace-only).
-   - Fill in app name, support email, developer contact.
-   - Add the scopes the app requests (see below). Some are **sensitive/restricted** and require verification before public release.
-3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-   - Application type: **iOS**.
-   - Bundle ID: must match `APP_BUNDLE_ID` in `Config/Shared.xcconfig` (default `com.truesolutions.firetap`).
-4. Copy the **Client ID** (`…apps.googleusercontent.com`) and the **iOS URL scheme** (`com.googleusercontent.apps.…`).
+   - User type: **External** (unless you only use Google Workspace internal users).
+   - App name: **FireTap**
+   - Support email: your email
+   - Developer contact: your email
+   - Save.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**
+   - Application type: **iOS**
+   - Name: `FireTap iOS`
+   - Bundle ID: **`com.truesolutions.firetap`** (must match `APP_BUNDLE_ID` in `Config/Shared.xcconfig`)
+4. Copy:
+   - **Client ID** (ends with `.apps.googleusercontent.com`)
+   - **iOS URL scheme** (reversed client id, starts with `com.googleusercontent.apps.`)
 
-## 2. Enable the APIs you plan to use
+## 2. Enable APIs used in Phase 1
 
-Enable, per project you connect (or once at the org level), the APIs backing the modules you use — e.g.:
+In the same GCP project (or each Firebase project’s parent, depending on how you organize IAM):
 
-- Firebase Management API
-- Cloud Firestore API
-- Cloud Functions API, Cloud Logging API, Cloud Monitoring API
-- Identity Toolkit API
-- Cloud Storage / Firebase Storage
-- Firebase Realtime Database Management API
-- Firebase Remote Config API, Firebase Rules API, Firebase App Check API
-- Cloud Resource Manager API, IAM API
-- Firebase Hosting API, Firebase App Distribution API, Firebase Extensions API
-- Firebase Cloud Messaging API, Cloud Billing API
+| API | Why |
+|-----|-----|
+| **Firebase Management API** | List / get Firebase projects |
+| **Identity Toolkit API** (optional later) | Auth user admin (not Phase 1) |
 
-If an API isn't enabled, the corresponding screen shows an honest **permission / API-not-enabled** state (a `403`), never a fake success.
+For Phase 1 project listing, enable **Firebase Management API**:
+**APIs & Services → Library → “Firebase Management API” → Enable**.
 
-## 3. Fill in Secrets.xcconfig
+## 3. Configure FireTap locally
 
-```
+```bash
 cp Config/Secrets.xcconfig.example Config/Secrets.xcconfig
 ```
+
+Edit `Config/Secrets.xcconfig` (git-ignored):
 
 ```ini
 GOOGLE_OAUTH_CLIENT_ID = 1234567890-abcdef.apps.googleusercontent.com
 GOOGLE_OAUTH_REDIRECT_SCHEME = com.googleusercontent.apps.1234567890-abcdef
 ```
 
-`Secrets.xcconfig` is git-ignored. Regenerate the project (`xcodegen generate`) and run.
+- `GOOGLE_OAUTH_CLIENT_ID` = the iOS client id from step 1.
+- `GOOGLE_OAUTH_REDIRECT_SCHEME` = the **exact** “iOS URL scheme” Google shows (reversed client id).  
+  Do **not** invent a custom scheme like `com.truesolutions.firetap.oauth` for Google Sign-In — the SDK expects the reversed client id.
 
-## 4. Scopes requested (minimum)
+Then:
 
-| Scope | Why | Sensitivity |
-|---|---|---|
-| `openid` | Sign-in | — |
-| `.../auth/userinfo.email` | Show which account is connected | — |
-| `.../auth/userinfo.profile` | Name / avatar in the account switcher | — |
-| `.../auth/cloud-platform` | Read projects, metrics, logs, Firestore, users, storage; perform approved admin actions | **Sensitive/Restricted** |
-| `.../auth/firebase.database` | Realtime Database module | Sensitive |
+```bash
+xcodegen generate
+open FireTap.xcodeproj
+```
 
-The app explains every scope **before** authorization (`ScopeConsentView`) and requests the minimum needed for the enabled modules.
+Select your development Team under Signing & Capabilities, plug in a device or simulator, and Run.
 
-> `cloud-platform` is broad because it is the documented scope that Firestore Admin, Cloud Logging, Monitoring, IAM, Storage, and Firebase Management accept. If you only need read access to a subset, you can tighten `AppConfig.oauthScopes` and `requiredScopeValues`.
+## 4. Scopes FireTap requests (Phase 1)
 
-## 5. Google verification checklist (before public App Store release)
+Shown in-app before sign-in (`ScopeConsentView`):
 
-- [ ] OAuth consent screen completed with accurate app name, logo, and domains.
-- [ ] Authorized domain(s) verified in Search Console.
-- [ ] Privacy Policy URL live and reachable (see `docs/PRIVACY_POLICY.md`).
-- [ ] Terms of Use URL live (see `docs/TERMS_OF_USE.md`).
-- [ ] Demo video showing the OAuth flow and how each sensitive scope is used.
-- [ ] Justification for each sensitive/restricted scope (data stays on-device, not sent to any app server).
-- [ ] App name and branding do not imply Google endorsement.
-- [ ] Restricted-scope security assessment completed if required for your user base.
-- [ ] Contact email monitored for Google's review correspondence.
-- [ ] Confirm the app does **not** store or transmit user data to app-owned servers (a common approval blocker) — FireTap does not.
+| Scope | Purpose |
+|-------|---------|
+| `openid` | Secure sign-in |
+| `userinfo.email` | Show which Google account is connected |
+| `userinfo.profile` | Name / avatar in the account switcher |
+| `https://www.googleapis.com/auth/firebase.readonly` | List real Firebase projects (read-only) |
 
-## Troubleshooting
+Write / admin scopes (`cloud-platform`, etc.) are **not** requested at first sign-in. They will be requested later via **incremental authorization** when the user attempts a write action.
 
-- **`redirect_uri_mismatch`** — the reversed-client-id scheme in `Secrets.xcconfig` must exactly match the iOS URL scheme from the console, and the bundle id must match.
-- **`invalid_grant` on refresh** — the refresh token was revoked/expired; the app surfaces a reauthentication state.
-- **No refresh token returned** — ensure the flow uses `access_type=offline` and `prompt=consent` (it does); revoke prior grants if Google stops returning a refresh token.
+## 5. What you should see when it works
+
+1. Welcome → Continue with Google → consent sheet → Google account picker.
+2. Project list loads **real** Firebase projects for that account (name, ID, number, lifecycle).
+3. Kill and reopen the app → session restores without signing in again.
+4. Account switcher → “Use a different Google account” works.
+5. Sign out / Delete Local Credentials → next launch shows Welcome.
+
+## 6. Google verification (required before public release)
+
+Until the OAuth app is verified, Google shows an **“unverified app”** warning and may limit which users can sign in.
+
+Checklist for production release:
+
+- [ ] OAuth consent screen complete (app name, logo optional but recommended, homepage, privacy policy, terms URLs).
+- [ ] Scopes justified in the consent screen (especially any sensitive/restricted scopes added later for writes).
+- [ ] Privacy Policy + Terms hosted at the URLs in `Config/Shared.xcconfig`.
+- [ ] Submit for [Google OAuth verification](https://support.google.com/cloud/answer/9110914) if you use sensitive or restricted scopes with external users.
+- [ ] `firebase.readonly` is generally sufficient for Phase 1; adding `cloud-platform` later may trigger additional verification.
+- [ ] Confirm FireTap does **not** send user tokens or Firebase data to any FireTap-owned server (it does not).
+
+## 7. Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| “Sign-in not configured” | `Secrets.xcconfig` missing/empty, or client id doesn’t end with `.apps.googleusercontent.com`. Rebuild after editing. |
+| Redirect / URL scheme errors | Scheme must be the reversed client id from Google; Info.plist `CFBundleURLTypes` + `GIDClientID` are filled from xcconfig. |
+| Projects empty but account has Firebase apps | Enable Firebase Management API; ensure the Google account is Owner/Editor/Viewer on those Firebase projects. |
+| 403 on project list | Missing `firebase.readonly` (or broader) scope, or IAM on the Firebase project. |
+| Session doesn’t restore | User chose Sign out / Delete Local Credentials, or Keychain access group mismatch after changing bundle id. |
+
+## 8. Security reminders
+
+- Never commit `Config/Secrets.xcconfig`.
+- Never add a Google **client secret** to the iOS app.
+- Never log authorization headers, tokens, or emails (`RedactedLog` is used throughout).
+- Customer Firebase data travels **device ↔ Google only**.

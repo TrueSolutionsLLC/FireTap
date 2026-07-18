@@ -92,6 +92,84 @@ extension AuthUser {
             .sorted { $0.key < $1.key }
     }
 
+    /// Pretty-printed JSON for editing custom claims. Returns `{}` when empty.
+    var customClaimsJSON: String {
+        guard let customAttributes, !customAttributes.isEmpty else { return "{}" }
+        guard let data = customAttributes.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              JSONSerialization.isValidJSONObject(object),
+              let pretty = try? JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys]
+              ),
+              let string = String(data: pretty, encoding: .utf8)
+        else { return customAttributes }
+        return string
+    }
+
+    /// Normalizes and validates a claims JSON editor payload for `customAttributes`.
+    static func normalizedCustomAttributesJSON(_ raw: String) throws -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let data = trimmed.isEmpty ? Data("{}".utf8) : Data(trimmed.utf8)
+        let object = try JSONSerialization.jsonObject(with: data)
+        guard let dictionary = object as? [String: Any] else {
+            throw AuthClaimsValidationError.mustBeObject
+        }
+        let normalized = try JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys])
+        guard let string = String(data: normalized, encoding: .utf8) else {
+            throw AuthClaimsValidationError.invalidJSON
+        }
+        return string
+    }
+
+    /// Human-readable before/after summary for custom claims edits.
+    static func claimsDiffSummary(before: String?, after: String) -> String {
+        let beforeKeys = claimsKeys(from: before)
+        let afterKeys = claimsKeys(from: after)
+        let added = afterKeys.subtracting(beforeKeys).sorted()
+        let removed = beforeKeys.subtracting(afterKeys).sorted()
+        var lines: [String] = []
+        if !added.isEmpty { lines.append("Add: \(added.joined(separator: ", "))") }
+        if !removed.isEmpty { lines.append("Remove: \(removed.joined(separator: ", "))") }
+        let shared = beforeKeys.intersection(afterKeys)
+        let changed = shared.filter { claimValue(before, key: $0) != claimValue(after, key: $0) }.sorted()
+        if !changed.isEmpty { lines.append("Change: \(changed.joined(separator: ", "))") }
+        if lines.isEmpty { lines.append("No claim key changes.") }
+        lines.append("")
+        lines.append("Before:")
+        lines.append(prettyClaims(before))
+        lines.append("")
+        lines.append("After:")
+        lines.append(prettyClaims(after))
+        return lines.joined(separator: "\n")
+    }
+
+    private static func claimsKeys(from raw: String?) -> Set<String> {
+        guard let raw, !raw.isEmpty,
+              let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        return Set(object.keys)
+    }
+
+    private static func claimValue(_ raw: String?, key: String) -> String? {
+        guard let raw, !raw.isEmpty,
+              let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return object[key].map { String(describing: $0) }
+    }
+
+    private static func prettyClaims(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "{}" }
+        guard let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let pretty = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: pretty, encoding: .utf8)
+        else { return raw }
+        return string
+    }
+
     private static func dateFromEpochMillis(_ raw: String?) -> Date? {
         guard let raw, let ms = Double(raw) else { return nil }
         return Date(timeIntervalSince1970: ms / 1000)
@@ -127,4 +205,18 @@ struct QueryAccountResponse: Codable, Sendable {
     /// Total number of accounts, returned as a string by the API.
     let recordsCount: String?
     var count: Int? { recordsCount.flatMap(Int.init) }
+}
+
+enum AuthClaimsValidationError: Error, Sendable {
+    case mustBeObject
+    case invalidJSON
+
+    var userMessage: String {
+        switch self {
+        case .mustBeObject:
+            return "Custom claims must be a JSON object (e.g. {\"role\":\"admin\"})."
+        case .invalidJSON:
+            return "Custom claims must be valid JSON."
+        }
+    }
 }

@@ -28,7 +28,12 @@ struct WelcomeView: View {
         .sheet(isPresented: $showingConsent) {
             ScopeConsentView {
                 showingConsent = false
-                Task { await accountManager.signIn() }
+                Task {
+                    await accountManager.signIn()
+                    if accountManager.isSignedIn {
+                        await env.restoreLastProjectIfAccessible()
+                    }
+                }
             }
         }
         .alert(
@@ -101,7 +106,7 @@ struct WelcomeView: View {
                 showingConsent = true
             } label: {
                 HStack(spacing: Theme.Spacing.md) {
-                    if accountManager.phase == .authenticating || accountManager.phase == .exchanging {
+                    if accountManager.phase == .authenticating || accountManager.phase == .restoring {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: "g.circle.fill")
@@ -114,7 +119,7 @@ struct WelcomeView: View {
                 .background(Theme.Palette.accent, in: RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous))
                 .foregroundStyle(.white)
             }
-            .disabled(accountManager.phase == .authenticating || accountManager.phase == .exchanging)
+            .disabled(accountManager.phase == .authenticating || accountManager.phase == .restoring)
             .accessibilityIdentifier("welcome.continueWithGoogle")
         }
     }
@@ -130,8 +135,8 @@ struct WelcomeView: View {
 
     private var signInLabel: String {
         switch accountManager.phase {
+        case .restoring: return "Restoring session…"
         case .authenticating: return "Waiting for Google…"
-        case .exchanging: return "Finishing sign-in…"
         default: return "Continue with Google"
         }
     }

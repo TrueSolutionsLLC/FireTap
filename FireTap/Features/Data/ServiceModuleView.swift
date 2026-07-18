@@ -1,13 +1,23 @@
 import SwiftUI
 
-/// Routes a `ServiceModule` to its implementation. Modules that are wired to a
-/// live API render their real browser; the rest render an honest availability
-/// state that names the backing API — never a fake, working-looking screen.
 struct ServiceModuleView: View {
     let module: ServiceModule
     let project: FirebaseProject
+    @Environment(AppEnvironment.self) private var env
 
     var body: some View {
+        destination
+            .task {
+                guard let account = env.accountManager.activeAccountID else { return }
+                env.preferences.recordRecentlyViewed(
+                    ResourceKey.module(module),
+                    account: account
+                )
+            }
+    }
+
+    @ViewBuilder
+    private var destination: some View {
         switch module {
         case .firestore:
             FirestoreBrowserView(project: project)
@@ -15,14 +25,34 @@ struct ServiceModuleView: View {
             AuthUsersView(project: project)
         case .storage:
             StorageBrowserView(project: project)
-        default:
+        case .functions:
+            FunctionsBrowserView(project: project)
+        case .logs:
+            LogsBrowserView(project: project)
+        case .realtimeDatabase:
+            RealtimeDatabaseBrowserView(project: project)
+        case .remoteConfig:
+            RemoteConfigBrowserView(project: project)
+        case .hosting:
+            HostingBrowserView(project: project)
+        case .appCheck:
+            AppCheckBrowserView(project: project)
+        case .iam:
+            IAMBrowserView(project: project)
+        case .fcm:
+            FCMTestMessageView(project: project)
+        case .appDistribution:
+            AppDistributionBrowserView(project: project)
+        case .extensions:
+            ExtensionsBrowserView(project: project)
+        case .rules:
+            RulesBrowserView(project: project)
+        case .billing:
             ModuleUnavailableView(module: module)
         }
     }
 }
 
-/// Honest "not in this build" state. Clearly communicates status rather than
-/// showing a non-functional UI.
 struct ModuleUnavailableView: View {
     let module: ServiceModule
 
@@ -32,7 +62,7 @@ struct ModuleUnavailableView: View {
         } description: {
             VStack(spacing: Theme.Spacing.sm) {
                 Text("This module connects to the \(module.backingAPI).")
-                Text("It isn't available in this build yet. When enabled, it will read your live data directly from Google with no data passing through any app-owned server.")
+                Text("It isn’t available as a live screen in this build yet. The directory never shows a working-looking control for an unsupported operation.")
                     .font(.pcCaption)
                     .foregroundStyle(Theme.Palette.textSecondary)
             }

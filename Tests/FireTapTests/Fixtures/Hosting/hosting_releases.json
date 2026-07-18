@@ -1,0 +1,15 @@
+{
+  "releases": [
+    {
+      "name": "sites/demo/channels/live/releases/20260102T030405Z",
+      "version": {
+        "name": "sites/demo/versions/abc123",
+        "status": "FINALIZED"
+      },
+      "type": "DEPLOY",
+      "releaseTime": "2026-01-02T03:04:05Z",
+      "message": "Deploy from CLI"
+    }
+  ],
+  "nextPageToken": "NEXT"
+}

@@ -88,6 +88,7 @@ struct ProductionIndicator: View {
         .background(Theme.Palette.danger)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(readOnly ? "Production project, read-only Safe Mode" : "Production project")
+        .accessibilityHint(readOnly ? "Destructive actions require Safe Mode unlock with biometrics" : "Exercise caution when making changes")
     }
 }
 

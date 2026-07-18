@@ -1,0 +1,12 @@
+{
+  "channels": [
+    {
+      "name": "sites/demo/channels/live",
+      "url": "https://demo.web.app",
+      "createTime": "2026-01-01T00:00:00Z",
+      "updateTime": "2026-01-02T00:00:00Z",
+      "retainedReleaseCount": 10,
+      "expireTime": "2026-12-31T23:59:59Z"
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Settings: account management (multi-account), security, Pro, and legal.
+/// Settings: account management, security, Pro, and legal.
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.scenePhase) private var scenePhase
     @State private var confirmDeleteCredentials = false
+    @State private var showingAccountSheet = false
 
     private var accountManager: AccountManager { env.accountManager }
 
@@ -11,6 +13,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 accountsSection
+                costGuardSection
                 securitySection
                 proSection
                 aboutSection
@@ -20,26 +23,37 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .appBackground()
             .navigationTitle("Settings")
-        }
-        .confirmationDialog(
-            "Delete all local credentials?",
-            isPresented: $confirmDeleteCredentials,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Local Credentials", role: .destructive) {
-                Task { await accountManager.deleteLocalCredentials() }
+            .sheet(isPresented: $showingAccountSheet) {
+                AccountSwitcherSheet()
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes stored tokens from this device. Your Google account grant is not revoked — use Disconnect for that.")
+            .confirmationDialog(
+                "Delete all local credentials?",
+                isPresented: $confirmDeleteCredentials,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Local Credentials", role: .destructive) {
+                    Task {
+                        env.handleAccountSessionChange()
+                        await accountManager.deleteLocalCredentials()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes the Google Sign-In session from this device. Your Google account grant is not revoked — use Disconnect for that.")
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    env.appLock.noteActivity()
+                }
+            }
         }
     }
 
     private var accountsSection: some View {
-        Section("Connected accounts") {
-            ForEach(accountManager.accounts) { account in
+        Section("Connected account") {
+            if let account = accountManager.activeAccount {
                 Button {
-                    Task { await accountManager.setActiveAccount(account.id) }
+                    showingAccountSheet = true
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -50,34 +64,103 @@ struct SettingsView: View {
                                 .foregroundStyle(Theme.Palette.textSecondary)
                         }
                         Spacer()
-                        if account.id == accountManager.activeAccountID {
-                            Image(systemName: "checkmark").foregroundStyle(Theme.Palette.accent)
-                        }
-                    }
-                }
-                .swipeActions {
-                    Button("Disconnect", role: .destructive) {
-                        Task { await accountManager.disconnect(accountID: account.id) }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.textTertiary)
                     }
                 }
                 .listRowBackground(Theme.Palette.surface)
+                .accessibilityLabel("Signed in as \(account.email)")
+            } else {
+                Text("Not signed in")
+                    .foregroundStyle(Theme.Palette.textSecondary)
+                    .listRowBackground(Theme.Palette.surface)
             }
+
             Button {
-                Task { await accountManager.signIn() }
+                showingAccountSheet = true
             } label: {
-                Label("Add account", systemImage: "plus.circle")
+                Label("Switch or manage account", systemImage: "person.crop.circle.badge.plus")
             }
             .listRowBackground(Theme.Palette.surface)
         }
     }
 
+    @ViewBuilder
+    private var costGuardSection: some View {
+        if let project = env.selectedProject {
+            Section("Cost Guard") {
+                NavigationLink {
+                    CostGuardView(project: project)
+                } label: {
+                    Label("Session usage for \(project.name)", systemImage: "gauge.with.dots.needle.33percent")
+                }
+                .listRowBackground(Theme.Palette.surface)
+            }
+        }
+    }
+
     private var securitySection: some View {
         Section("Security") {
+            Toggle(isOn: appLockEnabledBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("App Lock")
+                    Text("Require \(env.appLock.biometryName) when opening FireTap and after inactivity.")
+                        .font(.pcCaption)
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                }
+            }
+            .listRowBackground(Theme.Palette.surface)
+
+            if env.appLock.isEnabled {
+                Picker("Inactivity timeout", selection: appLockTimeoutBinding) {
+                    ForEach(AppLockController.InactivityTimeout.allCases) { timeout in
+                        Text(timeout.title).tag(timeout)
+                    }
+                }
+                .listRowBackground(Theme.Palette.surface)
+            }
+
+            Toggle(isOn: screenshotPrivacyBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Screenshot privacy")
+                    Text("Hide app content in the app switcher and when the app is inactive.")
+                        .font(.pcCaption)
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                }
+            }
+            .listRowBackground(Theme.Palette.surface)
+
+            LabeledContent("Sign-in", value: "Google Sign-In (PKCE)")
+                .listRowBackground(Theme.Palette.surface)
             LabeledContent("Data path", value: "Device ↔ Google")
                 .listRowBackground(Theme.Palette.surface)
-            LabeledContent("Credentials", value: "iOS Keychain")
+            LabeledContent("Credentials", value: "SDK Keychain")
+                .listRowBackground(Theme.Palette.surface)
+            LabeledContent("Initial access", value: "Identity + Firebase read-only")
                 .listRowBackground(Theme.Palette.surface)
         }
+    }
+
+    private var appLockEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { env.appLock.isEnabled },
+            set: { env.appLock.isEnabled = $0 }
+        )
+    }
+
+    private var appLockTimeoutBinding: Binding<AppLockController.InactivityTimeout> {
+        Binding(
+            get: { env.appLock.inactivityTimeout },
+            set: { env.appLock.inactivityTimeout = $0 }
+        )
+    }
+
+    private var screenshotPrivacyBinding: Binding<Bool> {
+        Binding(
+            get: { env.appLock.screenshotPrivacyEnabled },
+            set: { env.appLock.screenshotPrivacyEnabled = $0 }
+        )
     }
 
     @ViewBuilder
@@ -114,12 +197,31 @@ struct SettingsView: View {
                         .font(.pcCaption)
                         .foregroundStyle(Theme.Palette.warning)
                         .listRowBackground(Theme.Palette.surface)
+
+                    Button("Retry Loading Product") {
+                        Task { await store.loadProduct() }
+                    }
+                    .listRowBackground(Theme.Palette.surface)
                 }
 
                 Button("Restore Purchases") {
                     Task { await store.restore() }
                 }
                 .listRowBackground(Theme.Palette.surface)
+            }
+
+            if case .pending = store.phase {
+                Text("Your purchase is pending approval. Pro will unlock when the transaction completes.")
+                    .font(.pcCaption)
+                    .foregroundStyle(Theme.Palette.warning)
+                    .listRowBackground(Theme.Palette.surface)
+            }
+
+            if let message = store.lastTransactionStateMessage {
+                Text(message)
+                    .font(.pcCaption)
+                    .foregroundStyle(Theme.Palette.warning)
+                    .listRowBackground(Theme.Palette.surface)
             }
 
             if case .failed(let message) = store.phase {
@@ -135,14 +237,24 @@ struct SettingsView: View {
         Section("About") {
             LabeledContent("Version", value: "\(AppConfig.marketingVersion) (\(AppConfig.buildNumber))")
                 .listRowBackground(Theme.Palette.surface)
+
+            ForEach(LegalDocument.allCases) { document in
+                NavigationLink {
+                    LegalDocumentView(document: document)
+                } label: {
+                    Text(document.title)
+                }
+                .listRowBackground(Theme.Palette.surface)
+            }
+
             if let url = AppConfig.privacyPolicyURL {
-                Link("Privacy Policy", destination: url).listRowBackground(Theme.Palette.surface)
+                Link("Privacy Policy (web)", destination: url).listRowBackground(Theme.Palette.surface)
             }
             if let url = AppConfig.termsURL {
-                Link("Terms of Use", destination: url).listRowBackground(Theme.Palette.surface)
+                Link("Terms of Use (web)", destination: url).listRowBackground(Theme.Palette.surface)
             }
             if let url = AppConfig.supportURL {
-                Link("Support", destination: url).listRowBackground(Theme.Palette.surface)
+                Link("Support (web)", destination: url).listRowBackground(Theme.Palette.surface)
             }
         }
     }
@@ -151,7 +263,10 @@ struct SettingsView: View {
         Section {
             if let active = accountManager.activeAccount {
                 Button("Disconnect \(active.email)", role: .destructive) {
-                    Task { await accountManager.disconnect(accountID: active.id) }
+                    Task {
+                        env.handleAccountSessionChange()
+                        await accountManager.disconnect(accountID: active.id)
+                    }
                 }
                 .listRowBackground(Theme.Palette.surface)
             }
@@ -160,7 +275,7 @@ struct SettingsView: View {
             }
             .listRowBackground(Theme.Palette.surface)
         } footer: {
-            Text("Disconnect revokes this app's access with Google and removes the local credential. Delete Local Credentials only removes tokens from this device.")
+            Text("FireTap does not create FireTap accounts. You sign in with Google; disconnecting or deleting local credentials does not delete your Google account. Disconnect revokes this app's access with Google and removes the local session.")
         }
     }
 }

@@ -16,6 +16,8 @@ struct HTTPRequest: Sendable {
     var headers: [String: String]
     var body: Data?
     var timeout: TimeInterval
+    /// Status codes treated as success in addition to 2xx (e.g. 308 for GCS resumable uploads).
+    var acceptableAdditionalStatuses: Set<Int>
 
     init(
         _ method: Method,
@@ -23,7 +25,8 @@ struct HTTPRequest: Sendable {
         query: [URLQueryItem] = [],
         headers: [String: String] = [:],
         body: Data? = nil,
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        acceptableAdditionalStatuses: Set<Int> = []
     ) {
         self.method = method
         self.url = url
@@ -31,6 +34,7 @@ struct HTTPRequest: Sendable {
         self.headers = headers
         self.body = body
         self.timeout = timeout
+        self.acceptableAdditionalStatuses = acceptableAdditionalStatuses
     }
 
     /// Fully resolved URL including query items.
@@ -51,4 +55,12 @@ struct HTTPResponse: Sendable {
     let data: Data
     let status: Int
     let etag: String?
+    let location: String?
+}
+
+/// Formats a `Content-Range` header value for byte-range uploads.
+enum HTTPContentRange {
+    static func header(start: Int, end: Int, total: Int) -> String {
+        "bytes \(start)-\(end)/\(total)"
+    }
 }

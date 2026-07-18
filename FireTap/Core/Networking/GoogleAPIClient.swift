@@ -53,6 +53,18 @@ struct GoogleAPIClient: Sendable {
         }
     }
 
+    /// Like `sendRaw`, but returns the HTTP response for any status code instead
+    /// of throwing on non-2xx responses.
+    func sendRawReturningStatus(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let token = try await tokenProvider.validAccessToken(forceRefresh: false)
+        var response = try await transport.sendReturningStatus(request, bearerToken: token)
+        if response.status == 401 {
+            let refreshed = try await tokenProvider.validAccessToken(forceRefresh: true)
+            response = try await transport.sendReturningStatus(request, bearerToken: refreshed)
+        }
+        return response
+    }
+
     // MARK: Helpers
 
     private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {

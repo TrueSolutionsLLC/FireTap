@@ -23,6 +23,22 @@ struct FirebaseProject: Decodable, Sendable, Identifiable, Hashable {
         return projectId
     }
 
+    /// True when the Management API reports an ACTIVE lifecycle state.
+    var isActive: Bool {
+        (state ?? "ACTIVE").uppercased() == "ACTIVE"
+    }
+
+    /// Human-readable lifecycle state for list rows.
+    var lifecycleDisplay: String {
+        let raw = (state ?? "ACTIVE").uppercased()
+        switch raw {
+        case "ACTIVE": return "Active"
+        case "DELETED": return "Deleted"
+        case "DELETE_REQUESTED": return "Delete requested"
+        default: return raw.capitalized
+        }
+    }
+
     /// Best-effort region string for display, if the project has a resource
     /// location set. Absent until the user has selected a default GCP location.
     var regionDisplay: String? {

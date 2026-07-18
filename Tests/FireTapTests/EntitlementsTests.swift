@@ -34,3 +34,15 @@ final class EntitlementsTests: XCTestCase {
         XCTAssertFalse(FeatureGate(isPro: false).canOfferWrites)
     }
 }
+
+@MainActor
+final class StoreManagerMessagingTests: XCTestCase {
+    func testPurchaseWithoutLoadedProductShowsUnavailableMessage() async {
+        let store = StoreManager(productID: "com.truesolutions.firetap.lifetime")
+        await store.purchase()
+        guard case .failed(let message) = store.phase else {
+            return XCTFail("expected failed phase, got \(store.phase)")
+        }
+        XCTAssertEqual(message, "The Pro product isn't available right now.")
+    }
+}

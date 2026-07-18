@@ -9,11 +9,27 @@ struct CommandCenterView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var appsPhase: AsyncPhase<[FirebaseAppInfo]> = .idle
 
+    private var accountID: String? { env.accountManager.activeAccountID }
+
+    private var favorites: [String] {
+        guard let accountID else { return [] }
+        return env.preferences.favoriteResourceKeys(account: accountID).sorted()
+    }
+
+    private var recentlyViewed: [String] {
+        guard let accountID else { return [] }
+        return env.preferences.recentlyViewedResourceKeys(account: accountID)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                     header
+                    statusRow
+                    if !favorites.isEmpty || !recentlyViewed.isEmpty {
+                        shortcutsSection
+                    }
                     resourcesCard
                     metricsSection
                     quickActions
@@ -48,10 +64,105 @@ struct CommandCenterView: View {
                     .foregroundStyle(Theme.Palette.textSecondary)
             }
             Spacer()
+            environmentBadge
+        }
+    }
+
+    private var environmentBadge: some View {
+        StatusChip(
+            text: env.selectedProjectEnvironment.shortTitle,
+            systemImage: env.selectedProjectEnvironment.isProduction ? "exclamationmark.shield.fill" : "tag.fill",
+            color: env.selectedProjectEnvironment.accentColor,
+            container: env.selectedProjectEnvironment.accentColor.opacity(0.18)
+        )
+        .accessibilityLabel("Project environment: \(env.selectedProjectEnvironment.title)")
+        .accessibilityHint(env.selectedProjectEnvironment.isProduction ? "Production projects use read-only Safe Mode by default" : "Environment label for this project")
+    }
+
+    private var statusRow: some View {
+        HStack(spacing: Theme.Spacing.sm) {
             if env.selectedProjectEnvironment.isProduction {
-                StatusChip(text: "SAFE", systemImage: "lock.fill",
-                           color: Theme.Palette.healthy, container: Theme.Palette.healthyContainer)
+                safeModeChip
             }
+            NavigationLink {
+                IncidentCenterView(project: project)
+            } label: {
+                StatusChip(
+                    text: "Incidents",
+                    systemImage: "exclamationmark.triangle.fill",
+                    color: Theme.Palette.warning,
+                    container: Theme.Palette.warningContainer
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Incident Center")
+            .accessibilityHint("View function failures, critical logs, and audit events")
+        }
+    }
+
+    private var safeModeChip: some View {
+        let unlocked = env.safeMode.isWriteUnlocked
+        return StatusChip(
+            text: unlocked ? "UNLOCKED" : "LOCKED",
+            systemImage: unlocked ? "lock.open.fill" : "lock.fill",
+            color: unlocked ? Theme.Palette.warning : Theme.Palette.healthy,
+            container: unlocked ? Theme.Palette.warningContainer : Theme.Palette.healthyContainer
+        )
+        .accessibilityLabel(unlocked ? "Safe Mode write access unlocked" : "Safe Mode write access locked")
+        .accessibilityHint(unlocked ? "Write access will relock after inactivity" : "Production writes require biometric unlock")
+    }
+
+    @ViewBuilder
+    private var shortcutsSection: some View {
+        if !favorites.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                SectionHeader(title: "Favorites")
+                Card {
+                    VStack(spacing: 0) {
+                        ForEach(favorites, id: \.self) { key in
+                            resourceShortcutRow(key)
+                            if key != favorites.last {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !recentlyViewed.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                SectionHeader(title: "Recently viewed")
+                Card {
+                    VStack(spacing: 0) {
+                        ForEach(recentlyViewed, id: \.self) { key in
+                            resourceShortcutRow(key)
+                            if key != recentlyViewed.last {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func resourceShortcutRow(_ key: String) -> some View {
+        if let module = ResourceKey.serviceModule(for: key) {
+            NavigationLink {
+                ServiceModuleView(module: module, project: project)
+            } label: {
+                Label(ResourceKey.displayTitle(for: key), systemImage: module.symbol)
+                    .font(.pcBody)
+                    .foregroundStyle(Theme.Palette.textPrimary)
+                    .padding(.vertical, Theme.Spacing.sm)
+            }
+        } else {
+            Text(ResourceKey.displayTitle(for: key))
+                .font(.pcBody)
+                .foregroundStyle(Theme.Palette.textSecondary)
+                .padding(.vertical, Theme.Spacing.sm)
         }
     }
 
@@ -99,10 +210,23 @@ struct CommandCenterView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             SectionHeader(title: "Live metrics")
             Card {
-                CardUnavailableNote(
-                    message: "Metrics for Firestore, Functions and Auth are read from Cloud Monitoring inside each module. Open a module under Data to view its live figures. No numbers are shown here until they load from Google.",
-                    systemImage: "chart.line.uptrend.xyaxis"
-                )
+                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                    NavigationLink {
+                        MonitoringMetricsView(project: project)
+                    } label: {
+                        Label("Cloud Functions monitoring", systemImage: "chart.line.uptrend.xyaxis")
+                            .font(.pcBodyEmphasis)
+                    }
+                    NavigationLink {
+                        CostGuardView(project: project)
+                    } label: {
+                        Label("Cost Guard (session usage)", systemImage: "gauge.with.dots.needle.33percent")
+                            .font(.pcBodyEmphasis)
+                    }
+                    Text("Metrics load from Cloud Monitoring when permitted. Cost Guard tracks Firestore operations from this session only.")
+                        .font(.pcCaption)
+                        .foregroundStyle(Theme.Palette.textSecondary)
+                }
             }
         }
     }
@@ -124,12 +248,15 @@ struct CommandCenterView: View {
                                 .font(.pcCaption)
                                 .foregroundStyle(Theme.Palette.textPrimary)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, Theme.Spacing.lg)
                         .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("\(module.title) module")
+                    .accessibilityHint("Opens the \(module.title) service browser")
                 }
             }
         }

@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class ProjectsViewModel {
     enum SortOrder: String, CaseIterable, Identifiable {
+        case activeThenName = "Active first"
         case name = "Name"
         case recent = "Recently opened"
         var id: String { rawValue }
@@ -12,7 +13,7 @@ final class ProjectsViewModel {
 
     private(set) var phase: AsyncPhase<[FirebaseProject]> = .idle
     var searchText: String = ""
-    var sortOrder: SortOrder = .name
+    var sortOrder: SortOrder = .activeThenName
 
     private let projectsService: ProjectsService
     private let preferences: PreferencesStore
@@ -25,6 +26,10 @@ final class ProjectsViewModel {
     }
 
     var connectedCount: Int { phase.value?.count ?? 0 }
+
+    var activeCount: Int {
+        (phase.value ?? []).filter(\.isActive).count
+    }
 
     var productionCount: Int {
         (phase.value ?? []).filter {
@@ -49,38 +54,32 @@ final class ProjectsViewModel {
             let projects = try await projectsService.listProjects()
             phase = .loaded(projects)
         } catch let error as APIError {
-            phase = .failed(error)
+            // Keep showing previous results if we had any; still surface the error.
+            if phase.value == nil {
+                phase = .failed(error)
+            } else {
+                phase = .failed(error)
+            }
         } catch {
             phase = .failed(.transport(underlying: "unknown"))
         }
     }
 
-    /// Filtered + sorted projects for display. Pinned always float to the top.
+    /// Filtered + sorted projects for display.
     var displayedProjects: [FirebaseProject] {
         guard let all = phase.value else { return [] }
-        let filtered: [FirebaseProject]
-        if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
-            filtered = all
-        } else {
-            let needle = searchText.lowercased()
-            filtered = all.filter {
-                $0.name.lowercased().contains(needle) || $0.projectId.lowercased().contains(needle)
-            }
-        }
+        let filtered = ProjectListOrdering.filter(all, searchText: searchText)
         let pinned = preferences.pinnedProjectIDs(account: accountID)
-        return filtered.sorted { lhs, rhs in
-            let lPinned = pinned.contains(lhs.projectId)
-            let rPinned = pinned.contains(rhs.projectId)
-            if lPinned != rPinned { return lPinned }
-            switch sortOrder {
-            case .name:
-                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-            case .recent:
-                let last = preferences.lastOpenedProjectID(account: accountID)
-                if lhs.projectId == last { return true }
-                if rhs.projectId == last { return false }
-                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        switch sortOrder {
+        case .activeThenName:
+            return ProjectListOrdering.sort(filtered, pinnedIDs: pinned)
+        case .name:
+            return filtered.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
+        case .recent:
+            let last = preferences.lastOpenedProjectID(account: accountID)
+            return ProjectListOrdering.sort(filtered, pinnedIDs: pinned, preferRecentID: last)
         }
     }
 

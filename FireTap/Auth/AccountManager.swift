@@ -1,27 +1,26 @@
 import Foundation
 import Observation
 
-/// Coordinates the full connected-account lifecycle: sign-in (PKCE), multi
-/// account switching, disconnect (with revocation) and local-credential
-/// deletion. This is the app's session authority and the UI's source of truth.
+/// Coordinates the Google Sign-In session: interactive sign-in, silent restore,
+/// account switching, disconnect, and local credential deletion. Tokens remain
+/// in the Google Sign-In SDK's Keychain-backed store — never UserDefaults.
 @MainActor
 @Observable
 final class AccountManager {
 
     enum Phase: Equatable {
         case idle
+        case restoring
         case authenticating
-        case exchanging
         case failed(AuthError)
     }
 
-    // Observable state
     private(set) var accounts: [ConnectedAccount] = []
     private(set) var activeAccountID: String?
     private(set) var phase: Phase = .idle
+    private(set) var grantedScopes: [String] = []
 
-    /// True when a real OAuth client id is configured.
-    let isConfigured: Bool = AppConfig.isOAuthConfigured
+    let isConfigured: Bool
 
     var activeAccount: ConnectedAccount? {
         guard let activeAccountID else { return nil }
@@ -30,169 +29,217 @@ final class AccountManager {
 
     var isSignedIn: Bool { activeAccount != nil }
 
-    // Dependencies
-    private let oauthClient: OAuthClient
-    private let credentialStore: CredentialStoring
-    private let tokenService: TokenService
-    private let webAuthenticator: WebAuthenticator
+    /// True when the session already includes scopes sufficient for write/admin APIs.
+    /// `cloud-platform` covers Cloud/Firebase admin; otherwise each configured write scope is required.
+    var hasWriteScopes: Bool {
+        if grantedScopes.contains(where: { $0.contains("cloud-platform") }) {
+            return true
+        }
+        return AppConfig.writeScopeValues.allSatisfy { needed in
+            grantedScopes.contains { $0 == needed || $0.hasSuffix(needed) }
+        }
+    }
+
+    private let session: GoogleSignInSessioning
     private let requiredScopes: [String]
-    private let lastActiveKey = "pc.lastActiveAccountID"
+    private let initialScopes: [String]
+    private let knownAccountsKey = "pc.knownAccountIDs"
     private let log = RedactedLog(category: "account")
 
     init(
-        oauthClient: OAuthClient,
-        credentialStore: CredentialStoring,
-        tokenService: TokenService,
-        webAuthenticator: WebAuthenticator = WebAuthenticator(),
-        requiredScopes: [String] = AppConfig.requiredScopeValues
+        session: GoogleSignInSessioning,
+        isConfigured: Bool = AppConfig.isOAuthConfigured,
+        requiredScopes: [String] = AppConfig.requiredScopeValues,
+        initialScopes: [String] = AppConfig.oauthScopes.map(\.value)
     ) {
-        self.oauthClient = oauthClient
-        self.credentialStore = credentialStore
-        self.tokenService = tokenService
-        self.webAuthenticator = webAuthenticator
+        self.session = session
+        self.isConfigured = isConfigured
         self.requiredScopes = requiredScopes
+        self.initialScopes = initialScopes
     }
 
     // MARK: Bootstrap
 
-    /// Loads persisted accounts from the Keychain and restores the last-used
-    /// active account. Does not perform any network calls.
+    /// Restores a previous Google Sign-In session from the SDK Keychain.
     func bootstrap() async {
-        let stored = (try? credentialStore.allCredentials()) ?? []
-        accounts = stored.map(\.account).sorted { $0.email < $1.email }
-
-        let remembered = UserDefaults.standard.string(forKey: lastActiveKey)
-        let restored = accounts.first { $0.id == remembered } ?? accounts.first
-        await setActiveAccount(restored?.id)
+        guard isConfigured else {
+            phase = .idle
+            return
+        }
+        phase = .restoring
+        session.configure()
+        do {
+            if let user = try await session.restorePreviousSignIn() {
+                apply(user)
+                phase = .idle
+                log.info("Restored previous Google Sign-In session.")
+            } else {
+                accounts = []
+                activeAccountID = nil
+                grantedScopes = []
+                phase = .idle
+            }
+        } catch {
+            accounts = []
+            activeAccountID = nil
+            grantedScopes = []
+            phase = .idle
+            log.warning("Session restore failed; presenting signed-out state.")
+        }
     }
 
-    // MARK: Sign-in
+    // MARK: Sign-in / switch
 
-    /// Runs the Authorization Code Flow with PKCE end-to-end and, on success,
-    /// stores the credential in the Keychain and makes the account active.
+    /// Interactive Google Sign-In. Pass `loginHint` when switching to a known
+    /// account. Uses only the Phase 1 initial scopes (identity + read-only
+    /// Firebase). Additional scopes are requested later via incremental auth.
     func signIn(loginHint: String? = nil) async {
         guard isConfigured else {
             phase = .failed(.notConfigured)
             return
         }
+        guard let presenter = PresentationAnchor.rootViewController() else {
+            phase = .failed(.invalidRequest)
+            return
+        }
         phase = .authenticating
         do {
-            let pkce = PKCEChallenge.generate()
-            let state = OAuthState.generate()
-            let authURL = try oauthClient.authorizationURL(
-                challenge: pkce,
-                state: state,
-                loginHint: loginHint
+            let user = try await session.signIn(
+                presenting: presenter,
+                loginHint: loginHint,
+                additionalScopes: Self.signInAdditionalScopes(from: initialScopes)
             )
-
-            let callback = try await webAuthenticator.authenticate(
-                url: authURL,
-                callbackScheme: AppConfig.oauthRedirectScheme
-            )
-            let code = try OAuthCallback.authorizationCode(from: callback, expectedState: state)
-
-            phase = .exchanging
-            let tokenResponse = try await oauthClient.exchange(code: code, verifier: pkce.verifier)
-
-            let grantedScopes = tokenResponse.scope?
-                .split(separator: " ").map(String.init) ?? []
-            let missing = requiredScopes.filter { !grantedScopes.contains($0) }
-            guard missing.isEmpty else {
-                throw AuthError.missingScopes(missing: missing.map(Self.shortScope))
-            }
-
-            let userInfo = try await oauthClient.fetchUserInfo(accessToken: tokenResponse.accessToken)
-            guard let email = userInfo.email else { throw AuthError.missingIdentity }
-
-            let account = ConnectedAccount(
-                id: userInfo.sub,
-                email: email,
-                displayName: userInfo.name,
-                avatarURL: userInfo.picture.flatMap(URL.init(string:))
-            )
-            guard let refreshToken = tokenResponse.refreshToken else {
-                // Without a refresh token we couldn't maintain the session.
-                throw AuthError.tokenRequest(error: "no_refresh_token",
-                                             description: "Google didn't return a refresh token.")
-            }
-            let credential = StoredCredential(
-                account: account,
-                refreshToken: refreshToken,
-                grantedScopes: grantedScopes
-            )
-            try credentialStore.save(credential)
-
-            let token = OAuthToken(
-                accessToken: tokenResponse.accessToken,
-                refreshToken: refreshToken,
-                expiresAt: Date.now.addingTimeInterval(TimeInterval(tokenResponse.expiresIn)),
-                scopes: grantedScopes,
-                tokenType: tokenResponse.tokenType
-            )
-            await tokenService.cacheToken(token, for: account.id)
-
-            if let index = accounts.firstIndex(where: { $0.id == account.id }) {
-                accounts[index] = account
-            } else {
-                accounts.append(account)
-                accounts.sort { $0.email < $1.email }
-            }
-            await setActiveAccount(account.id)
+            try validateScopes(user.grantedScopes)
+            apply(user)
             phase = .idle
-            log.info("Sign-in succeeded for a connected account.")
+            log.info("Sign-in succeeded.")
         } catch let error as AuthError {
             phase = .failed(error)
-            log.warning("Sign-in failed: \(String(describing: error))")
-        } catch let error as APIError {
-            phase = .failed(.tokenRequest(error: "api", description: error.userMessage))
-            log.warning("Sign-in failed (api): \(String(describing: error))")
+            log.warning("Sign-in failed.")
         } catch {
             phase = .failed(.tokenRequest(error: "unknown", description: nil))
         }
+    }
+
+    /// Signs in with a different Google account (replaces the active SDK session).
+    func switchAccount() async {
+        await signIn(loginHint: nil)
     }
 
     func clearError() {
         if case .failed = phase { phase = .idle }
     }
 
-    // MARK: Account switching
+    // MARK: Sign-out / disconnect
 
-    func setActiveAccount(_ id: String?) async {
-        activeAccountID = id
-        await tokenService.setActiveAccount(id)
-        if let id {
-            UserDefaults.standard.set(id, forKey: lastActiveKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: lastActiveKey)
-        }
+    /// Removes the local SDK session (Keychain). The Google grant remains until
+    /// the user revokes it in their Google account or we call `disconnect`.
+    func signOut() async {
+        session.signOut()
+        accounts = []
+        activeAccountID = nil
+        grantedScopes = []
+        clearKnownAccountIDs()
+        phase = .idle
+        log.info("Signed out; local credentials cleared.")
     }
 
-    // MARK: Disconnect / delete
-
-    /// Disconnects an account: best-effort token revocation with Google, then
-    /// deletes the local credential.
+    /// Revokes FireTap's Google grant and clears local SDK credentials.
     func disconnect(accountID: String) async {
-        if let credential = try? credentialStore.credential(forAccountID: accountID) {
-            try? await oauthClient.revoke(token: credential.refreshToken)
+        guard activeAccountID == accountID || accounts.contains(where: { $0.id == accountID }) else {
+            return
         }
-        try? credentialStore.delete(accountID: accountID)
-        await tokenService.forget(accountID)
-        accounts.removeAll { $0.id == accountID }
-        if activeAccountID == accountID {
-            await setActiveAccount(accounts.first?.id)
+        do {
+            try await session.disconnect()
+        } catch {
+            session.signOut()
+        }
+        accounts = []
+        activeAccountID = nil
+        grantedScopes = []
+        clearKnownAccountIDs()
+        phase = .idle
+    }
+
+    /// Deletes all local credentials without attempting Google revocation.
+    func deleteLocalCredentials() async {
+        session.signOut()
+        accounts = []
+        activeAccountID = nil
+        grantedScopes = []
+        clearKnownAccountIDs()
+        phase = .idle
+    }
+
+    /// Incremental authorization for write scopes (Phase 2+). Not used in Phase 1.
+    func requestWriteScopes() async throws {
+        guard let presenter = PresentationAnchor.rootViewController() else {
+            throw AuthError.invalidRequest
+        }
+        let user = try await session.requestAdditionalScopes(
+            AppConfig.writeScopeValues,
+            presenting: presenter
+        )
+        try validateScopes(requiredScopes)
+        apply(user)
+    }
+
+    // MARK: Private
+
+    private func apply(_ user: GoogleSignedInUser) {
+        guard !user.email.isEmpty else {
+            phase = .failed(.missingIdentity)
+            return
+        }
+        let account = ConnectedAccount(
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName,
+            avatarURL: user.avatarURL
+        )
+        accounts = [account]
+        activeAccountID = account.id
+        grantedScopes = user.grantedScopes
+        remember(accountID: account.id)
+    }
+
+    private func validateScopes(_ granted: [String]) throws {
+        let missing = requiredScopes.filter { needed in
+            !granted.contains(where: { $0 == needed || $0.hasSuffix(needed) })
+        }
+        // Google sometimes returns short scope names; also accept if cloud-platform
+        // was granted (superset) even though we no longer request it up front.
+        let stillMissing = missing.filter { needed in
+            if needed.contains("firebase.readonly") {
+                return !granted.contains(where: {
+                    $0.contains("firebase.readonly")
+                        || $0.contains("firebase")
+                        || $0.contains("cloud-platform")
+                })
+            }
+            return true
+        }
+        guard stillMissing.isEmpty else {
+            throw AuthError.missingScopes(missing: stillMissing.map(Self.shortScope))
         }
     }
 
-    /// Deletes ALL locally stored credentials without contacting Google.
-    /// (The grant may still exist in the user's Google account until revoked.)
-    func deleteLocalCredentials() async {
-        try? credentialStore.deleteAll()
-        await tokenService.forgetAll()
-        accounts.removeAll()
-        await setActiveAccount(nil)
+    /// OpenID scopes are requested via GIDConfiguration / default; additional
+    /// scopes passed to `signIn` should be the Google API scopes only.
+    private static func signInAdditionalScopes(from all: [String]) -> [String] {
+        all.filter { $0.hasPrefix("https://") }
     }
 
     private static func shortScope(_ scope: String) -> String {
         scope.split(separator: "/").last.map(String.init) ?? scope
+    }
+
+    private func remember(accountID: String) {
+        // Non-sensitive id only — never tokens. Used for UI continuity checks.
+        UserDefaults.standard.set([accountID], forKey: knownAccountsKey)
+    }
+
+    private func clearKnownAccountIDs() {
+        UserDefaults.standard.removeObject(forKey: knownAccountsKey)
     }
 }

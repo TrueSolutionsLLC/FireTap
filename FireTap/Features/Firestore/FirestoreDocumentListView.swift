@@ -11,6 +11,10 @@ struct FirestoreDocumentListView: View {
 
     @Environment(AppEnvironment.self) private var env
     @State private var model: FirestoreDocumentListViewModel?
+    @State private var showCreateDocument = false
+    @State private var navigateToCreatedDocument: FirestoreDocument?
+
+    private var accountID: String { env.accountManager.activeAccountID ?? "anonymous" }
 
     var body: some View {
         Group {
@@ -23,6 +27,24 @@ struct FirestoreDocumentListView: View {
         .appBackground()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarContent }
+        .sheet(isPresented: $showCreateDocument) {
+            FirestoreCreateDocumentView(
+                project: project,
+                databaseID: databaseID,
+                collectionPath: collectionPath
+            ) { created in
+                navigateToCreatedDocument = created
+                Task { await model?.loadFirstPage() }
+            }
+        }
+        .navigationDestination(item: $navigateToCreatedDocument) { document in
+            FirestoreDocumentDetailView(
+                project: project,
+                databaseID: databaseID,
+                document: document
+            )
+        }
         .task {
             if model == nil {
                 model = FirestoreDocumentListViewModel(
@@ -64,7 +86,11 @@ struct FirestoreDocumentListView: View {
                     }
                     ForEach(model.documents) { doc in
                         NavigationLink {
-                            FirestoreDocumentDetailView(project: project, document: doc)
+                            FirestoreDocumentDetailView(
+                                project: project,
+                                databaseID: databaseID,
+                                document: doc
+                            )
                         } label: {
                             documentRow(doc)
                         }
@@ -154,5 +180,52 @@ struct FirestoreDocumentListView: View {
 
     private var costPreviewPlaceholder: some View {
         LoadingStateView().padding()
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Menu {
+                NavigationLink {
+                    FirestoreQueryBuilderView(
+                        project: project,
+                        databaseID: databaseID,
+                        collectionPath: collectionPath
+                    )
+                } label: {
+                    Label("Run query", systemImage: "magnifyingglass")
+                }
+
+                let collectionID = FirestoreFieldsParser.collectionContext(for: collectionPath).collectionID
+                let saved = env.savedQueries
+                    .queries(account: accountID, projectID: project.projectId)
+                    .filter { $0.collectionID == collectionID }
+                if !saved.isEmpty {
+                    Section("Saved queries") {
+                        ForEach(saved) { query in
+                            NavigationLink {
+                                FirestoreQueryBuilderView(
+                                    project: project,
+                                    databaseID: databaseID,
+                                    collectionPath: collectionPath,
+                                    initialSavedQueryID: query.id
+                                )
+                            } label: {
+                                Text(query.title)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Queries", systemImage: "text.magnifyingglass")
+            }
+
+            Button {
+                showCreateDocument = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .accessibilityLabel("Create document")
+        }
     }
 }

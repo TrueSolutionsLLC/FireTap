@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Lists the project's real Cloud Storage buckets, then navigates into a
-/// folder-scoped, paginated object browser. Read-only in this build.
+/// folder-scoped, paginated object browser with upload/download/write actions.
 struct StorageBrowserView: View {
     let project: FirebaseProject
     @Environment(AppEnvironment.self) private var env
@@ -37,7 +37,7 @@ struct StorageBrowserView: View {
             Section("Buckets • \(buckets.count)") {
                 ForEach(buckets) { bucket in
                     NavigationLink {
-                        StorageObjectListView(bucket: bucket.name, prefix: "", title: bucket.name)
+                        StorageObjectListView(projectID: project.projectId, bucket: bucket.name, prefix: "", title: bucket.name)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(bucket.name)

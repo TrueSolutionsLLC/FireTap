@@ -1,4 +1,5 @@
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct FireTapApp: App {
@@ -11,15 +12,36 @@ struct FireTapApp: App {
                 .environment(environment)
                 .tint(Theme.Palette.accent)
                 .task {
+                    environment.appLock.configureOnLaunch()
                     await environment.accountManager.bootstrap()
+                    if environment.accountManager.isSignedIn {
+                        await environment.restoreLastProjectIfAccessible()
+                        await environment.resolvePendingDeepLink()
+                    }
                     environment.store.start()
                 }
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            // Relock Safe Mode writes whenever the app leaves the foreground.
-            if newPhase != .active {
-                environment.safeMode.relock()
-            }
+                .onOpenURL { url in
+                    if GIDSignIn.sharedInstance.handle(url) {
+                        return
+                    }
+                    Task {
+                        await environment.handleDeepLink(url)
+                    }
+                }
+                .onChange(of: environment.accountManager.activeAccountID) { _, newID in
+                    if newID == nil {
+                        environment.handleAccountSessionChange()
+                    } else {
+                        Task {
+                            await environment.restoreLastProjectIfAccessible()
+                            await environment.resolvePendingDeepLink()
+                        }
+                    }
+                }
+                .onChange(of: environment.accountManager.isSignedIn) { _, isSignedIn in
+                    guard isSignedIn else { return }
+                    Task { await environment.resolvePendingDeepLink() }
+                }
         }
     }
 }

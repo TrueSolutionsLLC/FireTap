@@ -9,8 +9,12 @@
 #include? "Secrets.xcconfig"
 
 // --- Product identity ------------------------------------------------------
+// Home-screen / Xcode Display Name. App Store listing name remains
+// "FireTap: Firebase Admin" (set in App Store Connect).
 APP_DISPLAY_NAME = FireTap
 APP_BUNDLE_ID = com.truesolutions.firetap
+// Primary category for Xcode General + Info.plist (Developer Tools).
+APP_CATEGORY = public.app-category.developer-tools
 
 // --- StoreKit --------------------------------------------------------------
 // Non-consumable lifetime Pro unlock. Referenced by AppConfig.storeKitProProductID.

@@ -57,6 +57,48 @@ final class PreferencesStore {
         return .unlabeled
     }
 
+    // MARK: Favorites (resource keys)
+
+    func favoriteResourceKeys(account: String) -> Set<String> {
+        Set(array(forKey: key("favorites", account)))
+    }
+
+    func setFavorite(_ isFavorite: Bool, resourceKey: String, account: String) {
+        var current = favoriteResourceKeys(account: account)
+        if isFavorite {
+            current.insert(resourceKey)
+        } else {
+            current.remove(resourceKey)
+        }
+        defaults.set(Array(current).sorted(), forKey: key("favorites", account))
+    }
+
+    func isFavorite(_ resourceKey: String, account: String) -> Bool {
+        favoriteResourceKeys(account: account).contains(resourceKey)
+    }
+
+    // MARK: Recently viewed (resource keys, capped at 20)
+
+    private static let recentlyViewedLimit = 20
+
+    func recentlyViewedResourceKeys(account: String) -> [String] {
+        array(forKey: key("recent", account))
+    }
+
+    func recordRecentlyViewed(_ resourceKey: String, account: String) {
+        var current = recentlyViewedResourceKeys(account: account)
+        current.removeAll { $0 == resourceKey }
+        current.insert(resourceKey, at: 0)
+        if current.count > Self.recentlyViewedLimit {
+            current = Array(current.prefix(Self.recentlyViewedLimit))
+        }
+        defaults.set(current, forKey: key("recent", account))
+    }
+
+    func clearRecentlyViewed(account: String) {
+        defaults.removeObject(forKey: key("recent", account))
+    }
+
     // MARK: Last opened project
 
     func lastOpenedProjectID(account: String) -> String? {
