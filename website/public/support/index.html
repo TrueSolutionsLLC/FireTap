@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Support · FireTap</title>
+<style>
+:root { color-scheme: light dark; --bg:#0f1419; --fg:#e7ecf1; --muted:#9aa7b5; --card:#1a222c; --accent:#f0783c; --link:#7eb6ff; }
+@media (prefers-color-scheme: light) { :root { --bg:#f4f6f8; --fg:#14212b; --muted:#5b6b7a; --card:#fff; --accent:#e86a28; --link:#0b5fff; } }
+body { margin:0; font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
+main { max-width:42rem; margin:0 auto; padding:2rem 1.25rem 4rem; }
+nav { font-size:0.9rem; color:var(--muted); margin-bottom:1.5rem; }
+nav a { color:var(--link); text-decoration:none; }
+h1 { font-size:1.75rem; letter-spacing:-0.02em; margin:0 0 0.25rem; }
+.brand { color:var(--accent); font-weight:700; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.5rem; }
+h2 { font-size:1.15rem; margin-top:1.75rem; }
+h3 { font-size:1rem; margin-top:1.25rem; }
+a { color:var(--link); }
+ul { padding-left:1.2rem; }
+li { margin:0.35rem 0; }
+footer { margin-top:3rem; padding-top:1rem; border-top:1px solid color-mix(in srgb, var(--muted) 35%, transparent); color:var(--muted); font-size:0.85rem; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="/">Home</a> · <a href="/privacy/">Privacy</a> · <a href="/terms/">Terms</a> · <a href="/support/">Support</a></nav>
+<p class="brand">FireTap</p>
+<h1>Support</h1>
+<p><strong>Publisher:</strong> True Solutions  </p><p><strong>App:</strong> FireTap (`com.truesolutions.firetap`)</p><h2>Getting help</h2><ul><li><strong>Email:</strong> <a href="mailto:support@firetap.app">support@firetap.app</a></li><li><strong>Security issues (private):</strong> <a href="mailto:security@firetap.app">security@firetap.app</a></li><li><strong>Typical response:</strong> within 2 business days</li></ul><h2>Common questions</h2><p><strong>Does my project data go through your servers?</strong>  </p><p>No. FireTap talks directly to Google APIs from your device. True Solutions does not operate a customer-data backend for FireTap.</p><p><strong>Where are my credentials stored?</strong>  </p><p>Google Sign-In session tokens are stored in the iOS Keychain by the Google Sign-In SDK. Use <strong>Settings → Disconnect</strong> to revoke access with Google and clear the local session, or <strong>Delete Local Credentials</strong> to remove the local session without revocation.</p><p><strong>Does Disconnect delete my Google account?</strong>  </p><p>No. FireTap never creates a FireTap account and never deletes your Google account. Disconnect only revokes this app’s access and clears local credentials.</p><p><strong>Why does a screen say “not permitted” or “API not enabled”?</strong>  </p><p>Your Google account lacks IAM permission for that resource, or the backing API isn’t enabled on the <strong>selected</strong> project. Enable the named API in Google Cloud Console, or ask a project Owner for the required role.</p><p><strong>Why am I asked for Face ID?</strong>  </p><p>Production-labeled projects open read-only (Safe Mode). Unlocking write access requires biometric authentication. Writes can relock when you leave the app or after inactivity (configurable in App Settings).</p><p><strong>Will viewing data cost money?</strong>  </p><p>It can. Firestore reads and other Google API operations may be billable. FireTap’s session Cost Guard counts activity in the current session only — it is not your Google invoice.</p><p><strong>How do I restore Pro?</strong>  </p><p>App Settings → Restore Purchases (uses your Apple ID). Pro is a one-time non-consumable purchase, not a subscription.</p><p><strong>App Settings vs Project Settings</strong>  </p><p>Use the gear on the Projects screen (or App Settings inside Settings) for account, security, appearance, purchases, and legal links. Project Settings cover the open Firebase project (Safe Mode, session Cost Guard).</p><h2>Reporting security issues</h2><p>Email <a href="mailto:security@firetap.app">security@firetap.app</a> privately rather than filing a public report.</p>
+<footer>True Solutions · Independent Firebase admin client · Not affiliated with Google LLC</footer>
+</main>
+<script src="/assets/analytics-consent.js?v=20260808" defer></script>
+</body>
+</html>

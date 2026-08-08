@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Privacy Policy · FireTap</title>
+<style>
+:root { color-scheme: light dark; --bg:#0f1419; --fg:#e7ecf1; --muted:#9aa7b5; --card:#1a222c; --accent:#f0783c; --link:#7eb6ff; }
+@media (prefers-color-scheme: light) { :root { --bg:#f4f6f8; --fg:#14212b; --muted:#5b6b7a; --card:#fff; --accent:#e86a28; --link:#0b5fff; } }
+body { margin:0; font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
+main { max-width:42rem; margin:0 auto; padding:2rem 1.25rem 4rem; }
+nav { font-size:0.9rem; color:var(--muted); margin-bottom:1.5rem; }
+nav a { color:var(--link); text-decoration:none; }
+h1 { font-size:1.75rem; letter-spacing:-0.02em; margin:0 0 0.25rem; }
+.brand { color:var(--accent); font-weight:700; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.5rem; }
+h2 { font-size:1.15rem; margin-top:1.75rem; }
+h3 { font-size:1rem; margin-top:1.25rem; }
+a { color:var(--link); }
+ul { padding-left:1.2rem; }
+li { margin:0.35rem 0; }
+footer { margin-top:3rem; padding-top:1rem; border-top:1px solid color-mix(in srgb, var(--muted) 35%, transparent); color:var(--muted); font-size:0.85rem; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="/">Home</a> · <a href="/privacy/">Privacy</a> · <a href="/terms/">Terms</a> · <a href="/support/">Support</a></nav>
+<p class="brand">FireTap</p>
+<h1>Privacy Policy</h1>
+<p><strong>Last updated:</strong> 18 July 2026</p><p><strong>True Solutions</strong> (“we”, “us”) publishes <strong>FireTap</strong> (the “App”), an independent third-party Firebase administration client for iOS. FireTap is not affiliated with, endorsed by, or sponsored by Google LLC.</p><h2>The short version</h2><ul><li>We do <strong>not</strong> operate a FireTap backend that receives your Firebase or Google Cloud project data. Traffic goes <strong>device ↔ Google</strong>.</li><li>We do <strong>not</strong> create FireTap accounts. You sign in with Google.</li><li>We do <strong>not</strong> sell data, show ads, or use third-party analytics or tracking SDKs.</li><li>Google Sign-In tokens stay in the on-device <strong>Keychain</strong> managed by the Google Sign-In SDK.</li><li>Disconnecting FireTap <strong>revokes</strong> this app’s Google access and removes the local session. That does <strong>not</strong> delete your Google account.</li></ul><h2>Information the App accesses</h2><h3>Google account identity</h3><p>Name, email, and avatar from Google Sign-In so you can see which account is connected. Shown on your device only; not transmitted to True Solutions servers (we do not operate one for this purpose).</p><h3>Firebase / Google Cloud project data</h3><p>Read (and, when you explicitly unlock writes and confirm, modified) <strong>directly</strong> via Google APIs under the OAuth scopes you approve. Never routed through or stored by True Solutions.</p><h3>On-device preferences</h3><p>Pinned projects, environment labels, recently viewed destinations, appearance, App Lock, Safe Mode defaults, and similar settings in `UserDefaults` on your device.</p><h3>Local encrypted audit trail</h3><p>A record of administrative actions <strong>you</strong> perform in FireTap (for example create, update, delete). Entries are encrypted on device and include action type, project/resource identifiers, and <strong>redacted descriptors</strong> (such as field *names* or JSON shape/size). They do <strong>not</strong> store document field values, Realtime Database payloads, custom-claim values, access tokens, or FCM tokens.</p><h3>StoreKit purchase information</h3><p>FireTap Pro is a one-time non-consumable In-App Purchase processed by Apple (`com.truesolutions.firetap.lifetime`). Entitlement state is read from StoreKit on your device. We do not receive your payment card details.</p><h3>Diagnostics</h3><p>FireTap does not ship a third-party crash or analytics SDK. OS-level logs on your device may include non-sensitive operational messages; FireTap redacts tokens and sensitive query values from its own logging helpers.</p><h2>What we collect on our servers</h2><p>Nothing related to your Google account or Firebase project contents. The App has no FireTap-operated customer-data backend.</p><h2>Authentication</h2><p>Sign-in uses the official <strong>Google Sign-In for iOS</strong> SDK (OAuth 2.0 Authorization Code + <strong>PKCE</strong>). FireTap never sees or stores your Google password and never imports service-account keys. There is <strong>no OAuth client secret</strong> in the iOS app (public iOS client).</p><h2>Data sharing</h2><p>We do not share your project data because we do not receive it. Data is exchanged between your device and Google under your authorization. See <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a> for how Google processes it.</p><h2>Retention and deletion</h2><ul><li>Google Sign-In session material remains until you <strong>Sign out</strong>, <strong>Disconnect</strong>, <strong>Delete Local Credentials</strong>, or uninstall.</li><li><strong>Disconnect</strong> revokes FireTap’s Google grant (when the revoke call succeeds) and clears the local session.</li><li><strong>Delete Local Credentials</strong> removes the local Google Sign-In session without attempting Google revocation — use Disconnect to revoke.</li><li>Uninstalling removes local preferences and the encrypted audit trail from the device (subject to normal iOS backup behavior).</li><li>None of these actions delete your Google account or your Firebase project data in Google Cloud.</li></ul><h2>Children’s privacy</h2><p>FireTap is intended for developers and administrators and is not directed to children under 13.</p><h2>Changes</h2><p>We may update this policy. The “Last updated” date will change when we do.</p><h2>Contact</h2><p><strong>Email:</strong> <a href="mailto:support@firetap.app">support@firetap.app</a>  </p><p><strong>Security reports:</strong> <a href="mailto:security@firetap.app">security@firetap.app</a>  </p><p><strong>Publisher:</strong> True Solutions</p>
+<h2>Optional website analytics</h2>
+<p>With your consent, the firetap.app website uses Google Analytics to measure visits, page views, scrolling, and outbound-link interactions. Google may receive technical information such as your IP address, device and browser information, and referring page. Advertising storage, ad personalization, and Google signals are disabled. Analytics does not load unless you select “Accept analytics,” and you can change that choice at any time using “Privacy choices.”</p>
+<p>This website analytics does not change FireTap’s app architecture. Firebase and Google Cloud project data continues to travel directly between your device and official Google APIs and is not sent to Google Analytics or routed through a FireTap backend.</p>
+<footer>True Solutions · Independent Firebase admin client · Not affiliated with Google LLC</footer>
+</main>
+<script src="/assets/analytics-consent.js?v=20260808" defer></script>
+</body>
+</html>
